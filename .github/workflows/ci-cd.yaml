@@ -5,6 +5,7 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -50,8 +51,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   deploy:
     name: Deploy to Kubernetes
@@ -65,13 +64,38 @@ jobs:
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
 
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@v2
+
       - name: Configure kubeconfig
+        id: kube
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
+          if [ -z "$KUBE_CONFIG_B64" ]; then
+            echo "skip_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::KUBE_CONFIG secret is not set. Skipping deploy."
+            exit 0
+          fi
+
           mkdir -p "$HOME/.kube"
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
+          echo "$KUBE_CONFIG_B64" | base64 -d > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
 
+          if grep -qE '127\.0\.0\.1|localhost' "$HOME/.kube/config"; then
+            echo "skip_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Kubeconfig points to localhost (Kind/Minikube/Docker Desktop)."
+            echo "::notice::GitHub Actions runs in the cloud and cannot reach your Mac's cluster."
+            echo "::notice::Deploy locally instead:"
+            echo "::notice::  kubectl apply -k k8s"
+            echo "::notice::  kubectl set image deployment/wisecow wisecow=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -n wisecow"
+            exit 0
+          fi
+
+          echo "skip_deploy=false" >> "$GITHUB_OUTPUT"
+
       - name: Deploy with Kustomize
+        if: steps.kube.outputs.skip_deploy != 'true'
         run: |
           cd k8s
           kustomize edit set image wisecow=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
@@ -79,6 +103,12 @@ jobs:
           kubectl rollout status deployment/wisecow -n wisecow --timeout=180s
 
       - name: Verify deployment
+        if: steps.kube.outputs.skip_deploy != 'true'
         run: |
           kubectl get pods,svc,ingress -n wisecow
           kubectl get deployment wisecow -n wisecow -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+
+      - name: Deploy skipped summary
+        if: steps.kube.outputs.skip_deploy == 'true'
+        run: |
+          echo "Deploy skipped — use a cloud cluster kubeconfig in KUBE_CONFIG for remote CD."

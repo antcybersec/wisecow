@@ -9,9 +9,11 @@ resources:
   - service.yaml
   - ingress.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: accuknox-assessment
-  app.kubernetes.io/managed-by: kustomize
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: accuknox-assessment
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: false
 
 images:
   - name: wisecow

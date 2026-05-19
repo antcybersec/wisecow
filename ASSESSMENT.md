@@ -8,7 +8,7 @@ Use this checklist before submitting your **public** GitHub repository.
 - [x] `k8s/` — Deployment, Service, Ingress with TLS
 - [x] `.github/workflows/ci-cd.yaml` — build/push to GHCR + deploy to K8s
 - [ ] Push repo to GitHub (public)
-- [ ] Set secret `KUBE_CONFIG` (base64 kubeconfig) for CD
+- [ ] (Optional) `KUBE_CONFIG` — only for **cloud** clusters; local Kind/Minikube kubeconfig will not work from GitHub Actions
 - [ ] Verify workflow run is green on `main`
 
 ## Problem Statement 2

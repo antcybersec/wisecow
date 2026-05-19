@@ -67,12 +67,12 @@ Workflow: `.github/workflows/ci-cd.yaml`
 **Required GitHub configuration:**
 
 1. **Repository → Settings → Actions → General** — Workflow permissions: read/write packages.
-2. **Repository secret `KUBE_CONFIG`** — Base64-encoded kubeconfig for your cluster:
+2. **Repository secret `KUBE_CONFIG`** (optional, for remote CD only) — Base64-encoded kubeconfig:
    ```bash
    cat ~/.kube/config | base64 | pbcopy   # macOS
    ```
-3. **Environment `production`** (optional) — Add protection rules if desired.
-4. Update `k8s/kustomization.yaml` image `newName` to match your GitHub username/repo, or rely on CI `kustomize edit set image`.
+   **Important:** Kind, Minikube, and Docker Desktop kubeconfigs use `127.0.0.1`. GitHub Actions runs in the cloud and **cannot** reach your Mac. The workflow skips deploy for localhost kubeconfigs. Use a cloud cluster (EKS, GKE, AKS, etc.) for automated deploy, or deploy locally with `make deploy`.
+3. Update `k8s/kustomization.yaml` image `newName` to match your GitHub username/repo, or rely on CI `kustomize edit set image`.
 
 **Image pull (private GHCR):** If the package is private, create an image pull secret in the `wisecow` namespace.
 

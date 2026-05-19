@@ -1,0 +1,9 @@
+.git
+.github
+k8s
+scripts
+kubearmor
+*.md
+LICENSE
+Makefile
+kind-config.yaml

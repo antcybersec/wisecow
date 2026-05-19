@@ -1,0 +1,73 @@
+# Zero-trust KubeArmor policy for Wisecow workload (PS3)
+# Apply: kubectl apply -f kubearmor/wisecow-zero-trust-policy.yaml
+apiVersion: security.kubearmor.com/v1
+kind: KubeArmorPolicy
+metadata:
+  name: wisecow-zero-trust
+  namespace: wisecow
+  annotations:
+    description: "Restrict Wisecow to least-privilege process, file, and network access"
+spec:
+  selector:
+    matchLabels:
+      app: wisecow
+  process:
+    severity: 5
+    matchPaths:
+      - path: /usr/bin/bash
+      - path: /bin/bash
+      - path: /bin/dash
+      - path: /usr/bin/nc
+      - path: /bin/nc
+      - path: /usr/games/cowsay
+      - path: /usr/games/fortune
+    action: Allow
+  file:
+    severity: 5
+    matchPaths:
+      - path: /app/wisecow.sh
+        readOnly: true
+      - path: /app/response
+      - path: /tmp/*
+      - path: /usr/share/games/fortunes/*
+        readOnly: true
+      - path: /usr/share/fortune/*
+        readOnly: true
+    matchDirectories:
+      - dir: /app
+        recursive: false
+    action: Allow
+  network:
+    severity: 3
+    matchProtocols:
+      - protocol: tcp
+        fromPort: 4499
+    action: Allow
+  capabilities:
+    severity: 5
+    matchCapabilities:
+      - capability: sys_admin
+      - capability: net_admin
+      - capability: sys_ptrace
+    action: Block
+
+---
+# Hardening policy: block common offensive binaries inside the pod
+apiVersion: security.kubearmor.com/v1
+kind: KubeArmorPolicy
+metadata:
+  name: wisecow-block-dangerous-binaries
+  namespace: wisecow
+spec:
+  selector:
+    matchLabels:
+      app: wisecow
+  process:
+    severity: 8
+    matchPaths:
+      - path: /usr/bin/curl
+      - path: /usr/bin/wget
+      - path: /usr/bin/nmap
+      - path: /usr/bin/nc.traditional
+    action: Block
+  message: "Blocked execution of non-essential binary (zero-trust policy)"

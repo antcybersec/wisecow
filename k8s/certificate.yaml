@@ -1,0 +1,16 @@
+# Optional: use with cert-manager for automatic TLS certificate provisioning.
+# Requires cert-manager and a ClusterIssuer named "selfsigned-issuer" (see scripts/setup-cert-manager.sh).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wisecow-tls-cert
+  namespace: wisecow
+spec:
+  secretName: wisecow-tls
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - wisecow.local
+  duration: 2160h
+  renewBefore: 360h

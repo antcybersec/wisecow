@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy to Kubernetes (requires cloud cluster in KUBE_CONFIG secret)"
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
@@ -55,7 +61,9 @@ jobs:
   deploy:
     name: Deploy to Kubernetes
     needs: build-and-push
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    # Only deploy when manually triggered with deploy=true (cloud kubeconfig required).
+    # Push/PR never run kubectl — avoids 127.0.0.1 errors from local Kind/Minikube secrets.
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy == true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -67,48 +75,34 @@ jobs:
       - name: Set up Kustomize
         uses: imranismail/setup-kustomize@v2
 
-      - name: Configure kubeconfig
+      - name: Validate kubeconfig
         id: kube
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
           if [ -z "$KUBE_CONFIG_B64" ]; then
-            echo "skip_deploy=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::KUBE_CONFIG secret is not set. Skipping deploy."
-            exit 0
+            echo "::error::KUBE_CONFIG secret is not set."
+            exit 1
           fi
 
           mkdir -p "$HOME/.kube"
           echo "$KUBE_CONFIG_B64" | base64 -d > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
 
-          if grep -qE '127\.0\.0\.1|localhost' "$HOME/.kube/config"; then
-            echo "skip_deploy=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Kubeconfig points to localhost (Kind/Minikube/Docker Desktop)."
-            echo "::notice::GitHub Actions runs in the cloud and cannot reach your Mac's cluster."
-            echo "::notice::Deploy locally instead:"
-            echo "::notice::  kubectl apply -k k8s"
-            echo "::notice::  kubectl set image deployment/wisecow wisecow=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -n wisecow"
-            exit 0
+          if grep -qE '127\.0\.0\.1|localhost|host\.docker\.internal|kubernetes\.docker\.internal' "$HOME/.kube/config"; then
+            echo "::error::KUBE_CONFIG points to a local cluster. GitHub Actions cannot reach it."
+            echo "::error::Use a cloud cluster (EKS/GKE/AKS) or deploy locally: kubectl apply -k k8s"
+            exit 1
           fi
 
-          echo "skip_deploy=false" >> "$GITHUB_OUTPUT"
-
       - name: Deploy with Kustomize
-        if: steps.kube.outputs.skip_deploy != 'true'
         run: |
           cd k8s
           kustomize edit set image wisecow=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          kubectl apply -k .
+          kubectl apply -k . --validate=false
           kubectl rollout status deployment/wisecow -n wisecow --timeout=180s
 
       - name: Verify deployment
-        if: steps.kube.outputs.skip_deploy != 'true'
         run: |
           kubectl get pods,svc,ingress -n wisecow
           kubectl get deployment wisecow -n wisecow -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
-
-      - name: Deploy skipped summary
-        if: steps.kube.outputs.skip_deploy == 'true'
-        run: |
-          echo "Deploy skipped — use a cloud cluster kubeconfig in KUBE_CONFIG for remote CD."

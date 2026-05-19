@@ -9,12 +9,6 @@ resources:
   - service.yaml
   - ingress.yaml
 
-labels:
-  - pairs:
-      app.kubernetes.io/part-of: accuknox-assessment
-      app.kubernetes.io/managed-by: kustomize
-    includeSelectors: false
-
 images:
   - name: wisecow
     newName: ghcr.io/antcybersec/wisecow

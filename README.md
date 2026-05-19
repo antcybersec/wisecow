@@ -62,7 +62,7 @@ Workflow: `.github/workflows/ci-cd.yaml`
 | Job | Trigger | Action |
 |-----|---------|--------|
 | `build-and-push` | push/PR to `main` | Build image, push to `ghcr.io/<owner>/<repo>` |
-| `deploy` | push to `main` | Apply manifests, rollout with commit SHA tag |
+| `deploy` | manual only (`workflow_dispatch` + deploy=true) | Apply manifests to a **cloud** cluster |
 
 **Required GitHub configuration:**
 
